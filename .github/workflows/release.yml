@@ -4,7 +4,14 @@ on:
   push:
     tags:
       - "*"
+    branches:
+      - "master"
+      - "main"
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'release (e.g. v3.7.11-1.20.1-1.21.8)'
+        required: true
 
 jobs:
   build:
@@ -29,8 +36,28 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew jar
 
+      - name: Determine Release Details
+        id: details
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag_name=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "title=Release ${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "title=Release ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=nightly" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "title=Nightly Build" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.details.outputs.tag_name }}
+          name: ${{ steps.details.outputs.title }}
+          prerelease: ${{ steps.details.outputs.prerelease }}
           files: build/libs/Iris-*.jar
           generate_release_notes: true
